@@ -1,4 +1,4 @@
-
+/** VARIABLES */
 /** CONFIGURATION. Set value to true or false if you want. Edit shop if you want.
 Make new item in shop by adding "itemNameInLowerCase":{cost:positiveNumber,sell:positiveNumber,apiName:"actualItemNameWithCasing"},
 */
@@ -18,6 +18,8 @@ const lobbyName = api.getLobbyName()//Get lobby name so that people don't have t
 const validStats = ["money", "kills", "deaths", "playtime", "bounty"];//Valid stats
 const safeInteger = Number.MAX_SAFE_INTEGER;//Prevent numbers from overflowing.
 const isNum = (s) => /^\d+$/.test(s);//Test to show if a nuber is a valid non-negative number.
+/** VARIABLES END */
+/** MODULES */
 const getRandomInt = (min, max) => {//Gets a random number from min to max
     min = Math.ceil(min);
     max = Math.floor(max);
@@ -39,53 +41,6 @@ function handleMace(k, v, d, i) {
     }
     return true;
 }
-//Totem logic
-onAttemptKillPlayer = (v, k) => {
-    if (enableTotemOfUndying && api.getItemSlot(v, 48)?.attributes?.customDisplayName === "Totem of Undying") {
-        api.setItemSlot(v, 48, "Air", 1);
-        let [x, y, z] = api.getPosition(v);
-        
-        api.playParticleEffect({
-            dir1: [-3, -1, -3],
-            dir2: [3, 3, 3],
-            pos1: [x, y, z],
-            pos2: [x, y + 2, z],
-            texture: "critical_hit",
-            minLifeTime: 0.5,
-            maxLifeTime: 1,
-            minEmitPower: 2,
-            maxEmitPower: 4,
-            minSize: 0.3,
-            maxSize: 0.8,
-            manualEmitCount: 150,
-            gravity: [0, -1, 0],
-            colorGradients: [
-                {
-                    timeFraction: 0,
-                    minColor: [0, 255, 0, 1],
-                    maxColor: [255, 215, 0, 1]
-                }
-            ],
-            velocityGradients: [
-                {
-                    timeFraction: 0,
-                    factor: 1,
-                    factor2: 1
-                }
-            ],
-            blendMode: 1
-        });
-        
-        api.applyEffect(v, "Health Regen", 30000, { inbuiltLevel: 2 });
-        api.applyEffect(v, "Damage Reduction", 30000, { inbuiltLevel: 2 });
-        api.setHealth(v, 30, undefined, true);
-        api.setShieldAmount(v, 30);
-        api.sendFlyingMiddleMessage(v, [{ icon: "Gold Gauntlets", style: { fontSize: "200px" } }], 1000, 4000);
-        api.sendMessage(v, [{ icon: "star fa-beat", style: { color: "gold", fontSize: "16px" } }, { str: " Totem Saved your life!", style: { color: "gold" } }]);
-        
-        return "preventDeath";
-    }
-};
 /** Stats Management. */
 
 // Module thats updates stats.
@@ -172,4 +127,53 @@ function sellItem(p, itemNameInput, amountInput) {
     api.sendMessage(p, `Successfully sold x${amount} ${targetItem.apiName} for $${totalPayout}!`, { color: "lime" });
     return true;
 }
-
+/** MODULES END */
+/** CALLBACKS START */
+//Totem logic
+onAttemptKillPlayer = (v, k) => {
+    if (enableTotemOfUndying && api.getItemSlot(v, 48)?.attributes?.customDisplayName === "Totem of Undying") {
+        api.setItemSlot(v, 48, "Air", 1);
+        let [x, y, z] = api.getPosition(v);
+        
+        api.playParticleEffect({
+            dir1: [-3, -1, -3],
+            dir2: [3, 3, 3],
+            pos1: [x, y, z],
+            pos2: [x, y + 2, z],
+            texture: "critical_hit",
+            minLifeTime: 0.5,
+            maxLifeTime: 1,
+            minEmitPower: 2,
+            maxEmitPower: 4,
+            minSize: 0.3,
+            maxSize: 0.8,
+            manualEmitCount: 150,
+            gravity: [0, -1, 0],
+            colorGradients: [
+                {
+                    timeFraction: 0,
+                    minColor: [0, 255, 0, 1],
+                    maxColor: [255, 215, 0, 1]
+                }
+            ],
+            velocityGradients: [
+                {
+                    timeFraction: 0,
+                    factor: 1,
+                    factor2: 1
+                }
+            ],
+            blendMode: 1
+        });
+        
+        api.applyEffect(v, "Health Regen", 30000, { inbuiltLevel: 2 });
+        api.applyEffect(v, "Damage Reduction", 30000, { inbuiltLevel: 2 });
+        api.setHealth(v, 30, undefined, true);
+        api.setShieldAmount(v, 30);
+        api.sendFlyingMiddleMessage(v, [{ icon: "Gold Gauntlets", style: { fontSize: "200px" } }], 1000, 4000);
+        api.sendMessage(v, [{ icon: "star fa-beat", style: { color: "gold", fontSize: "16px" } }, { str: " Totem Saved your life!", style: { color: "gold" } }]);
+        
+        return "preventDeath";
+    }
+};
+/** CALLBACKS END */
