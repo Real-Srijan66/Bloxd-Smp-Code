@@ -1,0 +1,175 @@
+```
+/** CONFIGURATION. Set value to true or false if you want. Edit shop if you want.
+Make new item in shop by adding "itemNameInLowerCase":{cost:positiveNumber,sell:positiveNumber,apiName:"actualItemNameWithCasing"},
+*/
+const enableMace = true
+const enableTotemOfUndying = true
+//Sample has been added for you. Note: Do not make sell price more than buy price else all the players have infinite money.
+const shop = {
+    "maple log": { apiName: "Maple Log", cost: 4, sell: 2 },
+    "coal": { sell: 15, cost: 35, apiName: "Coal" },
+    "iron bar": { cost: 40, sell: 30, apiName: "Iron Bar" },
+    "gold bar": { cost: 65, sell: 50, apiName: "Gold Bar" },
+    "diamond": { sell: 90, cost: 100, apiName: "Diamond" },
+    "moonstone": { cost: 150, sell: 120, apiName: "Moonstone" },
+};
+/** CONFIGURATION end */
+const lobbyName = api.getLobbyName()//Get lobby name so that people don't have to update this variable when lobby name changes.
+const validStats = ["money", "kills", "deaths", "playtime", "bounty"];//Valid stats
+const safeInteger = Number.MAX_SAFE_INTEGER;//Prevent numbers from overflowing.
+const isNum = (s) => /^\d+$/.test(s);//Test to show if a nuber is a valid non-negative number.
+const getRandomInt = (min, max) => {//Gets a random number from min to max
+    min = Math.ceil(min);
+    max = Math.floor(max);
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+};
+//Mace logic
+function handleMace(k, v, d, i) {
+    if (!enableMace) return true;
+    
+    if (i.includes("Mace")) {
+        d = Math.round(d * 1.5);
+        if (getRandomInt(1, 10) === 5) {
+            d = Math.floor(d * 1.75);
+            api.sendMessage(k, [{ icon: "swords", style: { color: "red" } }, { str: "Critical Damage!", style: { color: "orange" } }]);
+        }
+        api.applyHealthChange(v, -d, k);
+        api.setVelocity(k, 0, Math.min(1000, d / 1.25), 0);
+        return "preventDamage";
+    }
+    return true;
+}
+//Totem logic
+onAttemptKillPlayer = (v, k) => {
+    if (enableTotemOfUndying && api.getItemSlot(v, 48)?.attributes?.customDisplayName === "Totem of Undying") {
+        api.setItemSlot(v, 48, "Air", 1);
+        let [x, y, z] = api.getPosition(v);
+        
+        api.playParticleEffect({
+            dir1: [-3, -1, -3],
+            dir2: [3, 3, 3],
+            pos1: [x, y, z],
+            pos2: [x, y + 2, z],
+            texture: "critical_hit",
+            minLifeTime: 0.5,
+            maxLifeTime: 1,
+            minEmitPower: 2,
+            maxEmitPower: 4,
+            minSize: 0.3,
+            maxSize: 0.8,
+            manualEmitCount: 150,
+            gravity: [0, -1, 0],
+            colorGradients: [
+                {
+                    timeFraction: 0,
+                    minColor: [0, 255, 0, 1],
+                    maxColor: [255, 215, 0, 1]
+                }
+            ],
+            velocityGradients: [
+                {
+                    timeFraction: 0,
+                    factor: 1,
+                    factor2: 1
+                }
+            ],
+            blendMode: 1
+        });
+        
+        api.applyEffect(v, "Health Regen", 30000, { inbuiltLevel: 2 });
+        api.applyEffect(v, "Damage Reduction", 30000, { inbuiltLevel: 2 });
+        api.setHealth(v, 30, undefined, true);
+        api.setShieldAmount(v, 30);
+        api.sendFlyingMiddleMessage(v, [{ icon: "Gold Gauntlets", style: { fontSize: "200px" } }], 1000, 4000);
+        api.sendMessage(v, [{ icon: "star fa-beat", style: { color: "gold", fontSize: "16px" } }, { str: " Totem Saved your life!", style: { color: "gold" } }]);
+        
+        return "preventDeath";
+    }
+};
+/** Stats Management. */
+
+// Module thats updates stats.
+function stats(p, s, o, a = 0) {
+    if (p === undefined || s === undefined || o === undefined) return 0;
+    if (!validStats.includes(s)) return 0;
+    
+    let stat = api.getPlayerDbValue(p, s);
+    if (stat === null) return 0;
+    
+    if (o === "get") return stat;
+    else if (o === "add") stat = Math.min(safeInteger, stat + a);
+    else if (o === "rem") stat = Math.max(0, stat - a);
+    else if (o === "set") stat = Math.max(0, Math.min(safeInteger, a));
+    
+    api.setPlayerDbValue(p, s, stat);
+    return stat;
+}
+
+// Sets up stats and gives starter gear when player joins.
+function setUpPlayer(p) {
+    for (let stat of validStats) {
+        if (api.getPlayerDbValue(p, stat) === null) {
+            api.setPlayerDbValue(p, stat, 0);
+        }
+    }
+    
+    if (!api.getPlayerDbValue(p, "hasClaimedStarterGear")) {
+        for (let item of ["Helmet", "Chestplate", "Gauntlets", "Leggings", "Boots", "Sword", "Pickaxe"]) {
+            api.giveItem(p, "Wood " + item);
+        }
+        api.setPlayerDbValue(p, "hasClaimedStarterGear", "true");
+    }
+}
+
+/** SELL AND BUY MODULES */
+
+function buyItem(p, itemNameInput, amountInput) {
+    //Block any negative integers to prevent exploitation.
+    if (!isNum(amountInput)) return api.sendMessage(p, "Amount must be a positive number!", { color: "red" }), false;
+    let amount = parseInt(amountInput);
+    if (amount <= 0 || amount > 9999) return api.sendMessage(p, "Invalid amount range (1-9999)!", { color: "red" }), false;
+
+    let targetItem = shop[itemNameInput.toLowerCase()];
+    if (!targetItem) return api.sendMessage(p, "Item not found in shop configuration.", { color: "yellow" }), false;
+
+    let currentMoney = stats(p, "money", "get");
+    let totalCost = targetItem.cost * amount;
+
+    if (currentMoney < totalCost) {
+        return api.sendMessage(p, `You need $${totalCost - currentMoney} more to buy this!`, { color: "red" }), false;
+    }
+
+    // Prevents the player from getting scamming for getting less items.
+    let itemGiven = api.giveItem(p, targetItem.apiName, amount);
+    if (itemGiven !== amount) {
+        if (itemGiven > 0) api.removeItemName(p, targetItem.apiName, itemGiven);
+        return api.sendMessage(p, "Inventory full! Transaction safely cancelled.", { color: "red" }), false;
+    }
+
+    stats(p, "money", "rem", totalCost);
+    api.sendMessage(p, `Successfully bought x${amount} ${targetItem.apiName} for $${totalCost}!`, { color: "lime" });
+    return true;
+}
+
+function sellItem(p, itemNameInput, amountInput) {
+    if (!isNum(amountInput)) return api.sendMessage(p, "Amount must be a positive number!", { color: "red" }), false;
+    let amount = parseInt(amountInput);
+    if (amount <= 0 || amount > 9999) return api.sendMessage(p, "Invalid amount range (1-9999)!", { color: "red" }), false;
+
+    let targetItem = shop[itemNameInput.toLowerCase()];
+    if (!targetItem) return api.sendMessage(p, "Item not found in shop configuration.", { color: "yellow" }), false;
+
+    let playerItemCount = api.getInventoryItemAmount(p, targetItem.apiName);
+    if (playerItemCount < amount) {
+        return api.sendMessage(p, `You don't have enough ${targetItem.apiName} to sell!`, { color: "red" }), false;
+    }
+
+    let totalPayout = targetItem.sell * amount;
+    
+    api.removeItemName(p, targetItem.apiName, amount);
+    stats(p, "money", "add", totalPayout);
+    
+    api.sendMessage(p, `Successfully sold x${amount} ${targetItem.apiName} for $${totalPayout}!`, { color: "lime" });
+    return true;
+}
+```
