@@ -1,4 +1,4 @@
-```
+
 /** CONFIGURATION. Set value to true or false if you want. Edit shop if you want.
 Make new item in shop by adding "itemNameInLowerCase":{cost:positiveNumber,sell:positiveNumber,apiName:"actualItemNameWithCasing"},
 */
@@ -172,4 +172,4 @@ function sellItem(p, itemNameInput, amountInput) {
     api.sendMessage(p, `Successfully sold x${amount} ${targetItem.apiName} for $${totalPayout}!`, { color: "lime" });
     return true;
 }
-```
+
