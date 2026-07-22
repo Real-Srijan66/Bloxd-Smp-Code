@@ -1,9 +1,35 @@
+/** LICENSE */
+/*
+MIT License
+
+Copyright (c) 2026 Real_Srijan66
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
 /** VARIABLES */
 /** CONFIGURATION. Set value to true or false if you want. Edit shop if you want.
 Make new item in shop by adding "itemNameInLowerCase":{cost:positiveNumber,sell:positiveNumber,apiName:"actualItemNameWithCasing"},
 */
 const enableMace = true;
 const enableTotemOfUndying = true;
+const discordLink = " None yet."//Put a link if you need to put a discord link. Example discord.gg/*********.
+const lobbyColor = "cyan"//change color if you want
 //Sample has been added for you. Note: Do not make sell price more than buy price else all the players have infinite money.
 const shop = {
     "maple log": { apiName: "Maple Log", cost: 4, sell: 2 },
@@ -19,6 +45,8 @@ const lobbyName = api.getLobbyName();//Get lobby name so that people don't have 
 const validStats = ["money", "kills", "deaths", "playtime", "bounty"];//Valid stats
 const safeInteger = Number.MAX_SAFE_INTEGER;//Prevent numbers from overflowing.
 const isNum = (s) => /^\d+$/.test(s);//Test to show if a nuber is a valid non-negative number.
+let cache = []
+const rtpCd = {}
 /** VARIABLES END */
 /** MODULES */
 const getRandomInt = (min, max) => {//Gets a random number from min to max
@@ -41,6 +69,26 @@ function handleMace(k, v, d, i) {
     }
     return true;
 }
+/** RTP */
+rtp = (p) => {
+    if (api.hasEffect(p, "Pvp")) {
+        return sendErrorMsg(p, "Can't Rtp while in pvp."), false;
+    }
+    if (rtpCd[p] === undefined) rtpCd[p] = 1;
+    if (api.now() - rtpCd[p] >= 30000) {
+        let [x, y, z] = [getRandomInt(-399999, 399999), 100, getRandomInt(-399999, 399999)];
+        api.setPosition(p, x, y, z);
+        api.applyEffect(p,"Health Regen",30000,{inbuiltLevel:50})
+        api.applyEffect(p,"Feather Falling",30000,{inbuiltLevel:50})
+        api.preventFallDamageNextGrounding(p);
+        rtpCd[p] = api.now();
+        api.applyEffect(p, "Rtp Cooldown", 30000, { icon: "Compass" });
+        api.sendMessage(p, [{ icon: "joystick fa-bounce", style: { color: "lime" } }, { str: " You have been teleported to a random position!", style: { color: "orange" } }, { str: `\nPosition: X:${x} | Y:${y} | Z:${z}`, style: { color: "orange" } }]);
+    } else {
+        api.sendMessage(p, [{ icon: "exclamation", style: { color: "red", fontSize: "30px" } }, { str: "You must wait till rtp cooldown is over.", style: { color: "red" } }]);
+    }
+    return false;
+};
 /** Stats Management. */
 
 // Module thats updates stats.
@@ -67,7 +115,7 @@ function setUpPlayer(p) {
             api.setPlayerDbValue(p, stat, 0);
         }
     }
-
+    updateUi(p)
     if (!api.getPlayerDbValue(p, "hasClaimedStarterGear")) {
         for (let item of ["Helmet", "Chestplate", "Gauntlets", "Leggings", "Boots", "Sword", "Pickaxe"]) {
             api.giveItem(p, "Wood " + item);
@@ -127,6 +175,132 @@ function sellItem(p, itemNameInput, amountInput) {
     api.sendMessage(p, `Successfully sold x${amount} ${targetItem.apiName} for $${totalPayout}!`, { color: "lime" });
     return true;
 }
+sendErrorMsg = (p, m) => {
+    let icons = [["exclamation", "red"], ["warning", "yellow"], ["dizzy", "lightgray"]];
+    let iconArraySelected = icons[getRandomInt(0, icons.length - 1)];
+    api.sendMessage(p, [{ icon: iconArraySelected[0], style: { color: iconArraySelected[1], fontSize: "30px" } }, { str: m, style: { color: "red" } }]);
+};
+sendSuccessMsg = (p, m) => {
+    api.sendMessage(p, [{ icon: "joystick fa-bounce", style: { color: "lime" } }, { str: m, style: { color: "lime" } }]);
+};
+sendHelpMsg = (p) => { return api.sendMessage(p, [{ str: "Commands", style: { color: "cyan", fontSize: "30px" } }, { str: "\n1. !help: displays this command.\n2. !rtp: tps you to a random location.\n3. !shop: display all items in shop.\n4. !sell <amount> <item>: sell(s) the item(s).\n5. !buy <amount> <item>: buy(s) the item(s).\n6. !pay <partial name> amount: pays the specified player.\n7. !bet amount: try your luck to get double or nothing.\n8. !hunt <partial name>: hunts a player if player's bounty > 499 & hunt fee = $100", style: { color: "orange" } }]), false; };
+payPlayer = (p, m, r) => {
+    const money = stats(p, "money", "get");
+    if (!isNum(m) || parseInt(m) < 1) return api.sendMessage(p, "Invalid Amount!", { color: "yellow" }), false;
+    m = Number(m);
+    if (money < m) return api.sendMessage(p, [
+        { icon: "exclamation", style: { color: "red", fontSize: "30px" } },
+        { str: ` You need `, style: { color: "red" } },
+        { icon: "coins fa-flip", style: { color: "gold" } },
+        { str: ` ${m - money} more to pay ${api.getEntityName(r)} `, style: { color: "red" } },
+        { icon: "coins fa-flip", style: { color: "gold" } },
+        { str: ` ${m}`, style: { color: "red" } }
+    ]), false;
+    stats(p, "money", "rem", m);
+    stats(r, "money", "add", m);
+    updateUi(p);
+    updateUi(r);
+    api.sendMessage(p, [
+        { str: `You paid ${api.getEntityName(r)} `, style: { color: "orange" } },
+        { icon: "coins fa-flip", style: { color: "gold" } },
+        { str: `${m}`, style: { color: "gold" } }
+    ]);
+    return api.sendMessage(r, [
+        { str: `You received from ${api.getEntityName(p)} `, style: { color: "orange" } },
+        { icon: "coins fa-flip", style: { color: "gold" } },
+        { str: `${m}`, style: { color: "gold" } }
+    ]), true;
+};
+whisperToPlayer = (p, m, r) => {
+    if (api.hasEffect(p, "whisper")) return sendErrorMsg(p, "You should not spam whisper! Whisper cancelled.");
+    if (m.length > 85) {
+        return sendErrorMsg(p, "Max number of characters in msg = 85");
+    }
+    if (m.trim() == "") return sendErrorMsg(p, "Your message should not be empty. Whisper cancelled."), false;
+    api.sendMessage(p, `[Whisper to ${api.getEntityName(r)}]: ${m}`, { color: "lightgray" });
+    api.sendMessage(r, `[Whisper from ${api.getEntityName(p)}]: ${m}`, { color: "lightgray" });
+    api.applyEffect(p, "whisper", 2000, { displayName: "Cooldown for whispering", icon: "Bread" });
+    return true;
+};
+bountyPlayer = (p, a, r) => {
+    if (!isNum(a) || a < 1) return sendErrorMsg(p, "Invalid Amount!"), false;
+    a = Number(a);
+    let money = stats(p, "money", "get");
+    if (money < a) return sendErrorMsg(p, `You need $${a - money} more to bounty ${api.getEntityName(r)} $${a}`), false;
+    stats(p, "money", "rem", a);
+    stats(r, "bounty", "add", a);
+    updateUi(p);
+    updateUi(r);
+    return sendSuccessMsg(p, `You gave $${a} bounty to player ${api.getEntityName(r)}`);
+};
+casino = (p, a) => {
+    if (!isNum(a) || a < 1) return sendErrorMsg(p, " Invalid Amount!"), false;
+    a = Number(a);
+    let money = stats(p, "money", "get");
+    if (money < a) return sendErrorMsg(p, `You need $${a - money} to bet $${a}`), false;
+    if (getRandomInt(1, 10) < 6) {
+        stats(p, "money", "add", a);
+        updateUi(p);
+        return sendSuccessMsg(p, `You won $${a}!`), true;
+    } else {
+        stats(p, "money", "rem", a);
+        updateUi(p);
+        return api.sendMessage(p, "You lost $" + a, { color: "yellow" }), true;
+    }
+};
+huntPlayer = (p, r) => {
+    let bounty = stats(r, "bounty", "get");
+    if (bounty < 500) return sendErrorMsg(p, "The player you're trying to hunt has less than 500 bounty so you cant hunt this player. Teleport cancelled.");
+    let money = stats(p, "money", "get");
+    if (money < 100) return sendErrorMsg(p, "You must have atleast $100 to more to teleport to player. Teleport cancelled because you can't pay hunt fee.");
+    let [x, y, z] = api.getPosition(r);
+    api.setPosition(p, x, y, z);
+    sendSuccessMsg(p, "Teleported succesfully!");
+    sendErrorMsg(r, "You are being targetted by " + api.getEntityName(p));
+    stats(p, "money", "rem", 100);
+    updateUi(p);
+};
+checkPartialName = (p, n) => {
+    n = n.toLowerCase();
+    if (n.trim() == "") return api.sendMessage(p, "You didn't enter any name", { color: "yellow" }), false;
+    let ids = api.getPlayerIds();
+    let matches = [];
+    for (let id of ids) {
+        if (api.getEntityName(id).toLowerCase().includes(n)) matches.push(id);
+    }
+    if (matches.length == 1) return matches[0];
+    else if (matches.length == 0) return api.sendMessage(p, "No matches found.", { color: "yellow" }), false;
+    else return api.sendMessage(p, "Multiple matches found:\n" + matches.map(id => api.getEntityName(id)).join(",\n"), { color: "yellow" }), false;
+};
+updateUi = (p) => {
+    const bounty = stats(p, "bounty", "get");
+    const money = stats(p, "money", "get");
+    const kills = stats(p, "kills", "get");
+    const deaths = stats(p, "deaths", "get");
+    const playtime = stats(p, "playtime", "get");
+    const hours = Math.floor(playtime / 60);
+    const mins = playtime % 60;
+    api.setClientOption(p, "RightInfoText", [
+        { str: `${lobbyName}\n`, style: { color: lobbyColor, fontSize: "20px" } },
+        { icon: "joystick fa-bounce", style: { color: "orange", fontSize: "16px" } },
+        { str: ` Welcome ${api.getEntityName(p)}\n`, style: { color: "orange" } },
+        { icon: "crosshairs fa-spin", style: { color: "yellow", fontSize: "16px" } },
+        { str: ` Bounty: ${bounty}\n`, style: { color: "yellow" } },
+        { icon: "coins fa-flip", style: { color: "gold", fontSize: "16px" } },
+        { str: ` Money: ${money}\n`, style: { color: "gold" } },
+        { icon: "swords fa-beat", style: { color: "red", fontSize: "16px" } },
+        { str: ` Kills: ${kills}\n`, style: { color: "red" } },
+        { icon: "dizzy", style: { color: "lightgray", fontSize: "16px" } },
+        { str: ` Deaths: ${deaths}\n`, style: { color: "lightgray" } },
+        { icon: "clock-rotate-left", style: { color: "lime", fontSize: "16px" } },
+        { str: ` Playtime: ${hours} hours ${mins} minutes\n`, style: { color: "lime" } },
+        { icon: "circle-info", style: { color: "aquamarine", fontSize: "16px" } },
+        { str: "Type !help for more information.\n", style: { color: "aquamarine" } },
+        { icon: "fa-brands fa-discord fa-beat", style: { color: "#5865F2" } },
+        { str: discordLink, style: { color: "#5865F2" } }
+    ]);
+    api.setTargetedPlayerSettingForEveryone(p, "lobbyLeaderboardValues", { kills: kills, deaths: deaths, playtime: `${hours}hr${hours > 1 ? "s" : ""} ${mins} min${mins > 1 ? "s" : ""}`, money: money, bounty: bounty, username: [{ icon: "user" }, { str: api.getEntityName(p) }] }, true);
+};
 /** MODULES END */
 /** CALLBACKS START */
 //Totem logic
@@ -188,6 +362,62 @@ tick = () => {
             delete handleJoin[p];
         }
         break;
+    }
+};
+onPlayerChat = (p, m, c) => {
+    if (m[0] == "!") {
+        let args = m.split(" ");
+        let cmd = args[0].toLowerCase();
+        if (cmd == "!help") return sendHelpMsg(p);
+        else if (cmd == "!rtp") return rtp(p);
+        else if (cmd == "!shop") {
+            if (cache.length == 0) {
+                cache.push({ str: "Shop", style: { color: "cyan", fontSize: "30px" } });
+                for (let item in shop) {
+                    let itemObj = shop[item];
+                    cache.push({ str: `\n${itemObj.apiName}: (cost: ${itemObj.cost}, sell: ${itemObj.sell})`, style: { color: "orange" } });
+                }
+            }
+            api.sendMessage(p, cache);
+        }
+        else if (cmd == "!sell") {
+            if (args.length < 3) return api.sendMessage(p, "Syntax !sell amount item", { color: "yellow" }), false;
+            sellItem(p, args.slice(2, args.length).join(" ").toLowerCase(), args[1]);
+            return false;
+        } else if (cmd == "!buy") {
+            if (args.length < 3) return api.sendMessage(p, "Syntax !buy amount item", { color: "yellow" }), false;
+            buyItem(p, args.slice(2, args.length).join(" ").toLowerCase(), args[1]);
+            return false;
+        }
+        else if (cmd == "!pay") {
+            if (args.length < 3) return api.sendMessage(p, "Syntax !pay <partial name> amount", { color: "yellow" }), false;
+            let id = checkPartialName(p, args[1]);
+            if (id) payPlayer(p, args[2], id);
+            return false;
+        } else if (cmd == "!whisper" || cmd == "!w") {
+            if (args.length < 3) return sendErrorMsg(p, " Syntax !whisper <partial name> msg | !w <partial name> msg."), false;
+            let id = checkPartialName(p, args[1]);
+            if (id) whisperToPlayer(p, args.slice(2, args.length).join(" "), id);
+            return false;
+        } else if (cmd == "!bounty" || cmd == "!b") {
+            if (args.length < 3) return sendErrorMsg(p, " Syntax !bounty <partial name> amount | !b <partial name> amount."), false;
+            let id = checkPartialName(p, args[1]);
+            if (id) bountyPlayer(p, args[2], id);
+            return false;
+        } else if (cmd == "!bet") {
+            if (args.length < 2) return sendErrorMsg(p, " Syntax !bet amount."), false;
+            casino(p, args[1]);
+            return false;
+        } else if (cmd == "!hunt" || cmd == "!h") {
+            if (args.length < 3) return sendErrorMsg(p, " Syntax !hunt <partial name> | !h <partial name>."), false;
+            let id = checkPartialName(p, args[1]);
+            if (id) huntPlayer(p, id);
+            return false;
+        }
+        else {
+            api.sendMessage(p, "Invalid Command! Sending help Msg for you.", { color: "red" });
+            return sendHelpMsg(p);
+        }
     }
 };
 //handle logic from join to tick
