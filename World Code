@@ -41,7 +41,7 @@ const shop = {
 };
 /** CONFIGURATION end */
 const handleJoin = {};
-const lobbyName = api.getLobbyName();//Get lobby name so that people don't have to update this variable when lobby name changes.
+const lobbyName = api.getLobbyName().replaceAll("_"," ");//Get lobby name so that people don't have to update this variable when lobby name changes.
 const validStats = ["money", "kills", "deaths", "playtime", "bounty"];//Valid stats
 const safeInteger = Number.MAX_SAFE_INTEGER;//Prevent numbers from overflowing.
 const isNum = (s) => /^\d+$/.test(s);//Test to show if a nuber is a valid non-negative number.
