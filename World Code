@@ -26,8 +26,8 @@ SOFTWARE.
 /** CONFIGURATION. Set value to true or false if you want. Edit shop if you want.
 Make new item in shop by adding "itemNameInLowerCase":{cost:positiveNumber,sell:positiveNumber,apiName:"actualItemNameWithCasing"},
 */
-const enableMace = true;
-const enableTotemOfUndying = true;
+const enableMace = true;//boolean true/false
+const enableTotemOfUndying = true;//boolean true/false
 const discordLink = " None yet."//Put a link if you need to put a discord link. Example discord.gg/*********.
 const lobbyColor = "cyan"//change color if you want
 //Sample has been added for you. Note: Do not make sell price more than buy price else all the players have infinite money.
@@ -42,12 +42,17 @@ const shop = {
 const customLobbyName = ""//Add a custom lobby name(if none then the system will go with default).
 /** CONFIGURATION end */
 const handleJoin = {};
-const lobbyName = customLobbyName || api.getLobbyName().replaceAll("_"," ");//Get lobby name so that people don't have to update this variable when lobby name changes.
+const lobbyName = customLobbyName || api.getLobbyName().replaceAll("_"," ");//generate default lobby name
+let isProcessingPlaytime = false;
+let savedPlayerIndex = 0;
+let playtimeUpdated = false;
+let uiUpdated = false;
 const validStats = ["money", "kills", "deaths", "playtime", "bounty"];//Valid stats
 const safeInteger = Number.MAX_SAFE_INTEGER;//Prevent numbers from overflowing.
 const isNum = (s) => /^\d+$/.test(s);//Test to show if a nuber is a valid non-negative number.
-let cache = []
-const rtpCd = {}
+let cache = [];
+let time = api.now()
+const rtpCd = {};
 /** VARIABLES END */
 /** MODULES */
 const getRandomInt = (min, max) => {//Gets a random number from min to max
@@ -291,7 +296,7 @@ updateUi = (p) => {
         { str: ` Money: ${money}\n`, style: { color: "gold" } },
         { icon: "swords fa-beat", style: { color: "red", fontSize: "16px" } },
         { str: ` Kills: ${kills}\n`, style: { color: "red" } },
-        { icon: "dizzy", style: { color: "lightgray", fontSize: "16px" } },
+        { icon: "skull", style: { color: "lightgray", fontSize: "16px" } },
         { str: ` Deaths: ${deaths}\n`, style: { color: "lightgray" } },
         { icon: "clock-rotate-left", style: { color: "lime", fontSize: "16px" } },
         { str: ` Playtime: ${hours} hours ${mins} minutes\n`, style: { color: "lime" } },
@@ -352,6 +357,7 @@ onAttemptKillPlayer = (v, k) => {
     }
 };
 //tick handles joins for now
+//tick handles joins and playtime progression
 tick = () => {
     while (!api.isNearInterrupt()) {
         for (let p in handleJoin) {
@@ -362,6 +368,36 @@ tick = () => {
             setUpPlayer(p);
             delete handleJoin[p];
         }
+
+        if (api.now() - time >= 60000 && !isProcessingPlaytime) {
+            time = api.now();
+            isProcessingPlaytime = true;
+            savedPlayerIndex = 0;
+        }
+
+        if (isProcessingPlaytime) {
+            const players = api.getPlayerIds();
+            while (savedPlayerIndex < players.length) {
+                let p = players[savedPlayerIndex];
+                if (api.checkValid(p)) {
+                    if (!playtimeUpdated) {
+                        stats(p, "playtime", "add", 1);
+                        playtimeUpdated = true;
+                    }
+                    if (!uiUpdated) {
+                        updateUi(p);
+                        uiUpdated = true;
+                    }
+                }
+                savedPlayerIndex++;
+                playtimeUpdated = false;
+                uiUpdated = false;
+            }
+            if (savedPlayerIndex >= players.length) {
+                isProcessingPlaytime = false;
+            }
+        }
+
         break;
     }
 };
